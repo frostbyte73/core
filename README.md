@@ -3,7 +3,7 @@ Golang function throttler.
 Similar to debounce, but the first call will execute immediately.  
 Subsequent calls will always have a minimum duration between executions.
 
-###Examples
+### Examples
 
 Simple usage:
 ```go
