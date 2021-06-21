@@ -45,7 +45,6 @@ func (t *throttler) execute() {
 	defer t.mu.Unlock()
 
 	if t.next != nil {
-		t.ready = false
 		t.next()
 		t.next = nil
 		t.timer = time.AfterFunc(t.after, t.execute)
