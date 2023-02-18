@@ -9,7 +9,7 @@ A thread-safe one-way switch, used for permanent state changes.
 ```go
 type Server struct {
     msgs chan *Message
-	shutdown core.Fuse
+    shutdown core.Fuse
 }
 
 func NewServer() *Server {
