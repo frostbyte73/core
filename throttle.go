@@ -1,17 +1,20 @@
-package throttle
+package core
 
 import (
 	"sync"
 	"time"
 )
 
-// New returns a function throttler that takes a function as its argument.
+// Throttle is a function throttler that takes a function as its argument.
 // If ready, it will execute immediately, and it will always wait the specified duration
-// between executions. The last function added will be the function executed.
-func New(after time.Duration) func(f func()) {
-	t := &throttler{
-		after: after,
-		ready: true,
+// between executions. If multiple functions are added within the same execution window,
+// only the last function added will be executed.
+type Throttle func(f func())
+
+func NewThrottle(period time.Duration) Throttle {
+	t := &throttle{
+		period: period,
+		ready:  true,
 	}
 
 	return func(f func()) {
@@ -19,35 +22,35 @@ func New(after time.Duration) func(f func()) {
 	}
 }
 
-type throttler struct {
-	mu    sync.Mutex
-	after time.Duration
-	ready bool
-	timer *time.Timer
-	next  func()
+type throttle struct {
+	m      sync.Mutex
+	period time.Duration
+	ready  bool
+	timer  *time.Timer
+	next   func()
 }
 
-func (t *throttler) add(f func()) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+func (t *throttle) add(f func()) {
+	t.m.Lock()
+	defer t.m.Unlock()
 
 	if t.ready {
 		t.ready = false
 		f()
-		t.timer = time.AfterFunc(t.after, t.execute)
+		t.timer = time.AfterFunc(t.period, t.execute)
 	} else {
 		t.next = f
 	}
 }
 
-func (t *throttler) execute() {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+func (t *throttle) execute() {
+	t.m.Lock()
+	defer t.m.Unlock()
 
 	if t.next != nil {
 		t.next()
 		t.next = nil
-		t.timer = time.AfterFunc(t.after, t.execute)
+		t.timer = time.AfterFunc(t.period, t.execute)
 	} else {
 		t.ready = true
 	}
