@@ -23,7 +23,7 @@ func (s *Server) Run() {
         select {
         case msg := <-s.msgs:
             s.Process(msg)
-        case <-s.shutdown.Wire():
+        case <-s.shutdown.Watch():
             return
         }   
     }
@@ -37,7 +37,7 @@ func (s *Server) DoSomething() {
 }
 
 func (s *Server) Shutdown() {
-    s.shutdown.Close()
+    s.shutdown.Break()
 }
 ```
 
