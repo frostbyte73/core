@@ -14,6 +14,8 @@ type Fuse interface {
 	IsClosed() bool
 	// Wire returns a channel which will close once the fuse is broken
 	Wire() <-chan struct{}
+	// OnClose sets a callback to run when the fuse is broken
+	OnClose(func())
 	// Close breaks the fuse
 	Close()
 }
@@ -25,9 +27,10 @@ func NewFuse() Fuse {
 }
 
 type fuse struct {
-	done uint32
-	m    sync.Mutex
-	c    chan struct{}
+	done    uint32
+	m       sync.Mutex
+	c       chan struct{}
+	onClose func()
 }
 
 func (f *fuse) IsOpen() bool {
@@ -52,6 +55,10 @@ func (f *fuse) Wire() <-chan struct{} {
 	return f.c
 }
 
+func (f *fuse) OnClose(onClose func()) {
+	f.onClose = onClose
+}
+
 func (f *fuse) Close() {
 	if atomic.LoadUint32(&f.done) == 0 {
 		f.close()
@@ -63,6 +70,9 @@ func (f *fuse) close() {
 	defer f.m.Unlock()
 	if f.done == 0 {
 		defer atomic.StoreUint32(&f.done, 1)
+		if onClose := f.onClose; onClose != nil {
+			onClose()
+		}
 		close(f.c)
 	}
 }
