@@ -13,11 +13,11 @@ type Fuse interface {
 	// IsClosed returns true if the fuse has been broken
 	IsClosed() bool
 	// Wire returns a channel which will close once the fuse is broken
-	Wire() <-chan struct{}
+	Watch() <-chan struct{}
+	// Break breaks the fuse
+	Break()
 	// Once runs the callback and breaks the fuse
 	Once(func())
-	// Close breaks the fuse
-	Close()
 }
 
 func NewFuse() Fuse {
@@ -50,19 +50,17 @@ func (f *fuse) IsClosed() bool {
 	}
 }
 
-func (f *fuse) Wire() <-chan struct{} {
+func (f *fuse) Watch() <-chan struct{} {
 	return f.c
+}
+
+func (f *fuse) Break() {
+	f.Once(nil)
 }
 
 func (f *fuse) Once(do func()) {
 	if atomic.LoadUint32(&f.done) == 0 {
 		f.close(do)
-	}
-}
-
-func (f *fuse) Close() {
-	if atomic.LoadUint32(&f.done) == 0 {
-		f.close(nil)
 	}
 }
 
