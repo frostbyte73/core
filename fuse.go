@@ -8,10 +8,8 @@ import (
 // Fuse is a thread-safe one-way switch, used for permanent state changes.
 // Implementation partially borrowed from sync.Once
 type Fuse interface {
-	// IsOpen returns true if the fuse has not been broken
-	IsOpen() bool
-	// IsClosed returns true if the fuse has been broken
-	IsClosed() bool
+	// IsBroken returns true if the fuse has been broken
+	IsBroken() bool
 	// Wire returns a channel which will close once the fuse is broken
 	Watch() <-chan struct{}
 	// Break breaks the fuse
@@ -32,16 +30,7 @@ type fuse struct {
 	c    chan struct{}
 }
 
-func (f *fuse) IsOpen() bool {
-	select {
-	case <-f.c:
-		return false
-	default:
-		return true
-	}
-}
-
-func (f *fuse) IsClosed() bool {
+func (f *fuse) IsBroken() bool {
 	select {
 	case <-f.c:
 		return true

@@ -30,7 +30,7 @@ func (s *Server) Run() {
 }
 
 func (s *Server) DoSomething() {
-    if s.shutdown.IsClosed() {
+    if s.shutdown.IsBroken() {
         return errors.New("server closed")
     }
     ...
