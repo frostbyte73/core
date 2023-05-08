@@ -130,23 +130,21 @@ func (w *worker) run() {
 		select {
 		case <-kill:
 			return
+		case <-draining:
+			w.drain()
+			return
 		case job := <-w.next:
-			job()
+			if job != nil {
+				job()
+			}
 
 			w.Lock()
 			if w.deque.Len() > 0 {
 				w.next <- w.deque.PopFront()
-			} else if w.draining.IsBroken() {
-				w.done.Break()
-				w.Unlock()
-				return
 			} else {
 				w.active = false
 			}
 			w.Unlock()
-		case <-draining:
-			w.done.Break()
-			return
 		}
 	}
 }
@@ -174,6 +172,25 @@ func (w *worker) Drain() {
 	case <-w.done.Watch():
 	case <-w.kill.Watch():
 	}
+}
+
+func (w *worker) drain() {
+	w.Lock()
+
+	select {
+	case job := <-w.next:
+		if job != nil {
+			job()
+		}
+	default:
+	}
+	count := w.deque.Len()
+	for i := 0; i < count; i++ {
+		w.deque.PopFront()()
+	}
+
+	w.done.Break()
+	w.Unlock()
 }
 
 func (w *worker) Kill() {
