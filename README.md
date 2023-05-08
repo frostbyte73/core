@@ -68,3 +68,52 @@ Output:
 hello (immediately)
 world (after 250 ms)
 ```
+
+## QueueWorker
+
+Execute functions in order of submission.
+
+```go
+func main() {
+    w := core.NewQueueWorker(100)
+	w.Submit(func() {
+		time.Sleep(time.Second)
+		fmt.Printf("hello ")
+	})
+	w.Submit(func() {
+		fmt.Println("world!")	
+	})
+}
+```
+
+Output:
+
+```
+hello world!
+```
+
+## QueuePool
+
+A pool for QueueWorker management, organized by keys. Different worker keys will run in parallel.
+
+```go
+func main() {
+    p := core.NewQueuePool(100)
+	p.Submit("worker1", func() {
+		time.Sleep(time.Second)
+		fmt.Printf(" world")
+	})
+	p.Submit("worker2", func() {
+		fmt.Printf("hello")
+	})
+	p.Submit("worker1", func() {
+		fmt.Println("!")
+	})
+}
+```
+
+Output:
+
+```
+hello world!
+```
