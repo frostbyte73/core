@@ -8,7 +8,7 @@ import (
 )
 
 func TestPool(t *testing.T) {
-	p := NewQueuePool(10)
+	p := NewQueuePool(QueueWorkerParams{QueueSize: 10})
 
 	key1 := "1"
 	key2 := "2"

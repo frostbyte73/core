@@ -6,6 +6,8 @@ import (
 	"github.com/gammazero/deque"
 )
 
+const DefaultQueueSize = 100
+
 type QueuePool interface {
 	Submit(key string, job func())
 	Drain()
@@ -18,21 +20,31 @@ type QueueWorker interface {
 	Kill()
 }
 
+type QueueWorkerParams struct {
+	QueueSize    int
+	DropWhenFull bool
+	OnDropped    func()
+}
+
 type queuePool struct {
 	sync.Mutex
 
-	workers   map[string]QueueWorker
-	queueSize int
-	drain     Fuse
-	kill      Fuse
+	workers map[string]QueueWorker
+	params  QueueWorkerParams
+	drain   Fuse
+	kill    Fuse
 }
 
-func NewQueuePool(queueSize int) QueuePool {
+func NewQueuePool(params QueueWorkerParams) QueuePool {
+	if params.QueueSize == 0 {
+		params.QueueSize = DefaultQueueSize
+	}
+
 	return &queuePool{
-		workers:   make(map[string]QueueWorker),
-		queueSize: queueSize,
-		drain:     NewFuse(),
-		kill:      NewFuse(),
+		workers: make(map[string]QueueWorker),
+		params:  params,
+		drain:   NewFuse(),
+		kill:    NewFuse(),
 	}
 }
 
@@ -45,7 +57,7 @@ func (p *queuePool) Submit(key string, job func()) {
 
 	w, ok := p.workers[key]
 	if !ok {
-		w = NewQueueWorker(p.queueSize)
+		w = NewQueueWorker(p.params)
 		p.workers[key] = w
 	}
 	p.Unlock()
@@ -84,6 +96,7 @@ func (p *queuePool) Kill() {
 
 type worker struct {
 	sync.Mutex
+	QueueWorkerParams
 
 	active   bool
 	next     chan func()
@@ -93,13 +106,18 @@ type worker struct {
 	kill     Fuse
 }
 
-func NewQueueWorker(queueSize int) QueueWorker {
+func NewQueueWorker(params QueueWorkerParams) QueueWorker {
+	if params.QueueSize == 0 {
+		params.QueueSize = DefaultQueueSize
+	}
+
 	w := &worker{
-		next:     make(chan func(), 1),
-		deque:    deque.New[func()](queueSize),
-		draining: NewFuse(),
-		done:     NewFuse(),
-		kill:     NewFuse(),
+		QueueWorkerParams: params,
+		next:              make(chan func(), 1),
+		deque:             deque.New[func()](params.QueueSize),
+		draining:          NewFuse(),
+		done:              NewFuse(),
+		kill:              NewFuse(),
 	}
 	go w.run()
 	return w
@@ -107,6 +125,7 @@ func NewQueueWorker(queueSize int) QueueWorker {
 
 func (w *worker) run() {
 	kill := w.kill.Watch()
+	draining := w.draining.Watch()
 	for {
 		select {
 		case <-kill:
@@ -125,7 +144,7 @@ func (w *worker) run() {
 				w.active = false
 			}
 			w.Unlock()
-		case <-w.draining.Watch():
+		case <-draining:
 			w.done.Break()
 			return
 		}
@@ -135,7 +154,13 @@ func (w *worker) run() {
 func (w *worker) Submit(job func()) {
 	w.Lock()
 	if w.active {
-		w.deque.PushBack(job)
+		if w.DropWhenFull && w.deque.Len() == w.QueueSize {
+			if w.OnDropped != nil {
+				w.OnDropped()
+			}
+		} else {
+			w.deque.PushBack(job)
+		}
 	} else {
 		w.active = true
 		w.next <- job

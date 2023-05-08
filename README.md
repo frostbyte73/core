@@ -75,7 +75,7 @@ Execute functions in order of submission.
 
 ```go
 func main() {
-    w := core.NewQueueWorker(100)
+    w := core.NewQueueWorker(QueueWorkerParams{QueueSize: 10})
 	w.Submit(func() {
 		time.Sleep(time.Second)
 		fmt.Printf("hello ")
@@ -98,7 +98,7 @@ A pool for QueueWorker management, organized by keys. Different worker keys will
 
 ```go
 func main() {
-    p := core.NewQueuePool(100)
+    p := core.NewQueuePool(QueueWorkerParams{QueueSize: 10})
 	p.Submit("worker1", func() {
 		time.Sleep(time.Second)
 		fmt.Printf(" world")
