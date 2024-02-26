@@ -1,6 +1,7 @@
 package core
 
 import (
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -10,43 +11,64 @@ import (
 func TestPool(t *testing.T) {
 	p := NewQueuePool(QueueWorkerParams{QueueSize: 10})
 
-	key1 := "1"
-	key2 := "2"
+	const (
+		key1 = "1"
+		key2 = "2"
+	)
 
-	res1 := ""
-	res2 := ""
+	var val1, val2 uint32
+
+	val := func(ind ...int) uint32 {
+		var v uint32
+		for _, i := range ind {
+			v += uint32(1 << i)
+		}
+		return v
+	}
+	add1 := func(i int) {
+		atomic.AddUint32(&val1, 1<<i)
+	}
+	add2 := func(i int) {
+		atomic.AddUint32(&val2, 1<<i)
+	}
+	get1 := func() uint32 {
+		return atomic.LoadUint32(&val1)
+	}
+	get2 := func() uint32 {
+		return atomic.LoadUint32(&val2)
+	}
 
 	p.Submit(key1, func() {
 		time.Sleep(time.Millisecond * 500)
-		res1 += "1"
+		add1(1)
 	})
 
 	p.Submit(key2, func() {
-		res2 += "2"
+		add2(2)
 	})
 
 	p.Submit(key1, func() {
-		res1 += "3"
+		add1(3)
 	})
 
 	time.Sleep(time.Millisecond * 100)
-	require.Equal(t, "", res1)
-	require.Equal(t, "2", res2)
+	require.Equal(t, val(), get1())
+	require.Equal(t, val(2), get2())
 
 	time.Sleep(time.Millisecond * 500)
-	require.Equal(t, "13", res1)
+	require.Equal(t, val(1, 3), get1())
 
 	p.Submit(key1, func() {
 		time.Sleep(time.Millisecond * 500)
-		res1 += "4"
+		add1(4)
 	})
 
 	p.Submit(key2, func() {
 		time.Sleep(time.Millisecond * 500)
-		res2 += "5"
+		add2(5)
 	})
 
 	p.Drain()
-	require.Equal(t, "134", res1)
-	require.Equal(t, "25", res2)
+	require.Equal(t, val(1, 3, 4), get1())
+	require.Equal(t, val(2, 5), get2())
 }
