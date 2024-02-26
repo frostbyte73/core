@@ -5,59 +5,77 @@ import (
 	"sync/atomic"
 )
 
+const (
+	fuseNotInitialized = iota
+	fuseReady
+	fuseBroken
+)
+
 // Fuse is a thread-safe one-way switch, used for permanent state changes.
 // Implementation partially borrowed from sync.Once
-type Fuse interface {
-	// IsBroken returns true if the fuse has been broken
-	IsBroken() bool
-	// Wire returns a channel which will close once the fuse is broken
-	Watch() <-chan struct{}
-	// Break breaks the fuse
-	Break()
-	// Once runs the callback and breaks the fuse
-	Once(func())
+type Fuse struct {
+	state uint32
+	m     sync.Mutex
+	c     chan struct{}
 }
 
-func NewFuse() Fuse {
-	return &fuse{
-		c: make(chan struct{}),
-	}
-}
-
-type fuse struct {
-	done uint32
-	m    sync.Mutex
-	c    chan struct{}
-}
-
-func (f *fuse) IsBroken() bool {
-	select {
-	case <-f.c:
+// IsBroken returns true if the fuse has been broken
+func (f *Fuse) IsBroken() bool {
+	switch atomic.LoadUint32(&f.state) {
+	case fuseNotInitialized:
+		return false
+	case fuseBroken:
 		return true
 	default:
-		return false
+		select {
+		case <-f.c:
+			atomic.StoreUint32(&f.state, fuseBroken)
+			return true
+		default:
+			return false
+		}
 	}
 }
 
-func (f *fuse) Watch() <-chan struct{} {
+func (f *Fuse) init() {
+	if atomic.LoadUint32(&f.state) != fuseNotInitialized {
+		return
+	}
+	f.m.Lock()
+	defer f.m.Unlock()
+	if atomic.LoadUint32(&f.state) != fuseNotInitialized {
+		return
+	}
+	f.c = make(chan struct{})
+	atomic.StoreUint32(&f.state, fuseReady)
+}
+
+// Watch returns a channel which will close once the fuse is broken
+func (f *Fuse) Watch() <-chan struct{} {
+	f.init()
 	return f.c
 }
 
-func (f *fuse) Break() {
+// Break breaks the fuse
+func (f *Fuse) Break() {
 	f.Once(nil)
 }
 
-func (f *fuse) Once(do func()) {
-	if atomic.LoadUint32(&f.done) == 0 {
-		f.close(do)
+// Once runs the callback and breaks the fuse
+func (f *Fuse) Once(do func()) {
+	if atomic.LoadUint32(&f.state) == fuseBroken {
+		return
 	}
-}
-
-func (f *fuse) close(do func()) {
 	f.m.Lock()
 	defer f.m.Unlock()
-	if f.done == 0 {
-		defer atomic.StoreUint32(&f.done, 1)
+	switch atomic.LoadUint32(&f.state) {
+	case fuseBroken:
+		return
+	case fuseNotInitialized:
+		f.c = make(chan struct{})
+		fallthrough
+	default:
+		defer atomic.StoreUint32(&f.state, fuseBroken)
 		if do != nil {
 			do()
 		}
