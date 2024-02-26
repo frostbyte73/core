@@ -6,7 +6,7 @@ import (
 )
 
 func TestFuse(t *testing.T) {
-	f := NewFuse()
+	var f Fuse
 
 	onceStarted := make(chan struct{})
 	onceFinished := make(chan struct{})

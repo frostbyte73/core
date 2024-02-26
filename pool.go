@@ -43,8 +43,6 @@ func NewQueuePool(params QueueWorkerParams) QueuePool {
 	return &queuePool{
 		workers: make(map[string]QueueWorker),
 		params:  params,
-		drain:   NewFuse(),
-		kill:    NewFuse(),
 	}
 }
 
@@ -115,9 +113,6 @@ func NewQueueWorker(params QueueWorkerParams) QueueWorker {
 		QueueWorkerParams: params,
 		next:              make(chan func(), 1),
 		deque:             deque.New[func()](params.QueueSize),
-		draining:          NewFuse(),
-		done:              NewFuse(),
-		kill:              NewFuse(),
 	}
 	go w.run()
 	return w
