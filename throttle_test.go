@@ -25,11 +25,11 @@ func TestThrottle(t *testing.T) {
 	throttler(func() { c += 5 })
 	require.Equal(t, 17, c)
 
-	time.Sleep(time.Millisecond * 30)
+	time.Sleep(time.Millisecond * 40)
 	// function 3 executes
 	require.Equal(t, 22, c)
 
-	time.Sleep(time.Millisecond * 110)
+	time.Sleep(time.Millisecond * 100)
 	// ready
 
 	// executes immediately
