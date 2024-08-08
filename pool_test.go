@@ -9,7 +9,7 @@ import (
 )
 
 func TestPool(t *testing.T) {
-	p := NewQueuePool(QueueWorkerParams{QueueSize: 10})
+	p := NewQueuePool(2, QueueWorkerParams{QueueSize: 10})
 
 	const (
 		key1 = "1"

@@ -1,12 +1,16 @@
 package core
 
 import (
+	"hash/fnv"
 	"sync"
 
 	"github.com/gammazero/deque"
 )
 
-const DefaultQueueSize = 100
+const (
+	DefaultQueueSize = 100
+	DefaultCapacity  = 10
+)
 
 type QueuePool interface {
 	Submit(key string, job func())
@@ -29,21 +33,32 @@ type QueueWorkerParams struct {
 type queuePool struct {
 	sync.Mutex
 
-	workers map[string]QueueWorker
-	params  QueueWorkerParams
-	drain   Fuse
-	kill    Fuse
+	capacity int
+	workers  []QueueWorker
+	params   QueueWorkerParams
+	drain    Fuse
+	kill     Fuse
 }
 
-func NewQueuePool(params QueueWorkerParams) QueuePool {
+func NewQueuePool(maxWorkers int, params QueueWorkerParams) QueuePool {
+	if maxWorkers <= 0 {
+		maxWorkers = DefaultCapacity
+	}
 	if params.QueueSize == 0 {
 		params.QueueSize = DefaultQueueSize
 	}
 
 	return &queuePool{
-		workers: make(map[string]QueueWorker),
-		params:  params,
+		capacity: maxWorkers,
+		workers:  make([]QueueWorker, maxWorkers),
+		params:   params,
 	}
+}
+
+func (p *queuePool) hash(key string) int {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(key))
+	return int(h.Sum32()) % p.capacity
 }
 
 func (p *queuePool) Submit(key string, job func()) {
@@ -53,10 +68,11 @@ func (p *queuePool) Submit(key string, job func()) {
 		return
 	}
 
-	w, ok := p.workers[key]
-	if !ok {
+	idx := p.hash(key)
+	w := p.workers[idx]
+	if w == nil {
 		w = NewQueueWorker(p.params)
-		p.workers[key] = w
+		p.workers[idx] = w
 	}
 	p.Unlock()
 
@@ -69,12 +85,14 @@ func (p *queuePool) Drain() {
 
 		var wg sync.WaitGroup
 		for _, w := range p.workers {
-			wg.Add(1)
-			w := w
-			go func() {
-				w.Drain()
-				wg.Done()
-			}()
+			if w != nil {
+				wg.Add(1)
+				w := w
+				go func() {
+					w.Drain()
+					wg.Done()
+				}()
+			}
 		}
 		wg.Wait()
 
@@ -86,7 +104,9 @@ func (p *queuePool) Kill() {
 	p.kill.Once(func() {
 		p.Lock()
 		for _, w := range p.workers {
-			w.Kill()
+			if w != nil {
+				w.Kill()
+			}
 		}
 		p.Unlock()
 	})
