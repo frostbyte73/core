@@ -4,7 +4,7 @@ Things I wish were built in.
 
 ## Fuse
 
-A thread-safe one-way switch, used for permanent state changes.
+A thread-safe one-way switch, used for permanent state changes. The zero value is valid simlar to standard synchronization primitives.
 
 ```go
 type Server struct {
@@ -13,9 +13,7 @@ type Server struct {
 }
 
 func NewServer() *Server {
-    return &Server{
-        shutdown: core.NewFuse()	
-    }
+    return &Server{}
 }
 
 func (s *Server) Run() {
