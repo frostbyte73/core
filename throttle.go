@@ -32,26 +32,32 @@ type throttle struct {
 
 func (t *throttle) add(f func()) {
 	t.m.Lock()
-	defer t.m.Unlock()
-
-	if t.ready {
+	ready := t.ready
+	if ready {
 		t.ready = false
-		f()
 		t.timer = time.AfterFunc(t.period, t.execute)
 	} else {
 		t.next = f
+	}
+	t.m.Unlock()
+
+	if ready {
+		f()
 	}
 }
 
 func (t *throttle) execute() {
 	t.m.Lock()
-	defer t.m.Unlock()
-
-	if t.next != nil {
-		t.next()
+	f := t.next
+	if f != nil {
 		t.next = nil
 		t.timer = time.AfterFunc(t.period, t.execute)
 	} else {
 		t.ready = true
+	}
+	t.m.Unlock()
+
+	if f != nil {
+		f()
 	}
 }
