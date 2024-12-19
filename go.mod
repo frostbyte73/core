@@ -1,8 +1,6 @@
 module github.com/frostbyte73/core
 
-go 1.22
-
-toolchain go1.22.1
+go 1.22.1
 
 require (
 	github.com/gammazero/deque v1.0.0
