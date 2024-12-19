@@ -118,7 +118,7 @@ type worker struct {
 
 	active   bool
 	next     chan func()
-	deque    *deque.Deque[func()]
+	deque    deque.Deque[func()]
 	draining Fuse
 	done     Fuse
 	kill     Fuse
@@ -132,8 +132,8 @@ func NewQueueWorker(params QueueWorkerParams) QueueWorker {
 	w := &worker{
 		QueueWorkerParams: params,
 		next:              make(chan func(), 1),
-		deque:             deque.New[func()](params.QueueSize),
 	}
+	w.deque.SetBaseCap(params.QueueSize)
 	go w.run()
 	return w
 }
