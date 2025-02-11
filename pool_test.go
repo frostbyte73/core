@@ -86,7 +86,7 @@ func TestPoolOverflow(t *testing.T) {
 		submitted := p.Submit("key", func() {
 			time.Sleep(time.Millisecond * 500)
 		})
-		if i < 3 {
+		if i < queueSize+1 {
 			require.True(t, submitted)
 		} else {
 			require.False(t, submitted)
