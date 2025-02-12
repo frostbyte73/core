@@ -27,7 +27,6 @@ type QueueWorker interface {
 type QueueWorkerParams struct {
 	QueueSize    int
 	DropWhenFull bool
-	OnDropped    func()
 }
 
 type queuePool struct {
@@ -169,9 +168,6 @@ func (w *worker) Submit(job func()) bool {
 	w.Lock()
 	if w.active {
 		if w.DropWhenFull && w.deque.Len() == w.QueueSize {
-			if w.OnDropped != nil {
-				w.OnDropped()
-			}
 			submitted = false
 		} else {
 			w.deque.PushBack(job)
