@@ -13,13 +13,13 @@ const (
 )
 
 type QueuePool interface {
-	Submit(key string, job func())
+	Submit(key string, job func()) bool
 	Drain()
 	Kill()
 }
 
 type QueueWorker interface {
-	Submit(job func())
+	Submit(job func()) bool
 	Drain()
 	Kill()
 }
@@ -27,7 +27,6 @@ type QueueWorker interface {
 type QueueWorkerParams struct {
 	QueueSize    int
 	DropWhenFull bool
-	OnDropped    func()
 }
 
 type queuePool struct {
@@ -61,11 +60,11 @@ func (p *queuePool) hash(key string) int {
 	return int(h.Sum32()) % p.capacity
 }
 
-func (p *queuePool) Submit(key string, job func()) {
+func (p *queuePool) Submit(key string, job func()) bool {
 	p.Lock()
 	if p.kill.IsBroken() {
 		p.Unlock()
-		return
+		return false
 	}
 
 	idx := p.hash(key)
@@ -76,7 +75,7 @@ func (p *queuePool) Submit(key string, job func()) {
 	}
 	p.Unlock()
 
-	w.Submit(job)
+	return w.Submit(job)
 }
 
 func (p *queuePool) Drain() {
@@ -164,13 +163,12 @@ func (w *worker) run() {
 	}
 }
 
-func (w *worker) Submit(job func()) {
+func (w *worker) Submit(job func()) bool {
+	submitted := true
 	w.Lock()
 	if w.active {
 		if w.DropWhenFull && w.deque.Len() == w.QueueSize {
-			if w.OnDropped != nil {
-				w.OnDropped()
-			}
+			submitted = false
 		} else {
 			w.deque.PushBack(job)
 		}
@@ -179,6 +177,7 @@ func (w *worker) Submit(job func()) {
 		w.next <- job
 	}
 	w.Unlock()
+	return submitted
 }
 
 func (w *worker) Drain() {

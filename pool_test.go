@@ -38,18 +38,21 @@ func TestPool(t *testing.T) {
 		return atomic.LoadUint32(&val2)
 	}
 
-	p.Submit(key1, func() {
+	submitted := p.Submit(key1, func() {
 		time.Sleep(time.Millisecond * 500)
 		add1(1)
 	})
+	require.True(t, submitted)
 
-	p.Submit(key2, func() {
+	submitted = p.Submit(key2, func() {
 		add2(2)
 	})
+	require.True(t, submitted)
 
-	p.Submit(key1, func() {
+	submitted = p.Submit(key1, func() {
 		add1(3)
 	})
+	require.True(t, submitted)
 
 	time.Sleep(time.Millisecond * 100)
 	require.Equal(t, val(), get1())
@@ -58,17 +61,37 @@ func TestPool(t *testing.T) {
 	time.Sleep(time.Millisecond * 500)
 	require.Equal(t, val(1, 3), get1())
 
-	p.Submit(key1, func() {
+	submitted = p.Submit(key1, func() {
 		time.Sleep(time.Millisecond * 500)
 		add1(4)
 	})
+	require.True(t, submitted)
 
-	p.Submit(key2, func() {
+	submitted = p.Submit(key2, func() {
 		time.Sleep(time.Millisecond * 500)
 		add2(5)
 	})
+	require.True(t, submitted)
 
 	p.Drain()
 	require.Equal(t, val(1, 3, 4), get1())
 	require.Equal(t, val(2, 5), get2())
+}
+
+func TestPoolOverflow(t *testing.T) {
+	queueSize := 2
+	p := NewQueuePool(2, QueueWorkerParams{QueueSize: queueSize, DropWhenFull: true})
+
+	for i := 0; i < queueSize+2; i++ {
+		submitted := p.Submit("key", func() {
+			time.Sleep(time.Millisecond * 500)
+		})
+		if i < queueSize+1 {
+			require.True(t, submitted)
+		} else {
+			require.False(t, submitted)
+		}
+	}
+
+	p.Drain()
 }
